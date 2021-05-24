@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/obj">
+        <file>xyzCalibration_cube.stl</file>
+        <file>ff.max</file>
+        <file>monkey.obj</file>
+        <file>bunny.3mf</file>
+    </qresource>
+</RCC>

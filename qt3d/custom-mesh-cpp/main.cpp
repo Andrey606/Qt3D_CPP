@@ -83,7 +83,7 @@ int main(int argc, char* argv[])
     Qt3DCore::QEntity *customMeshEntity = new Qt3DCore::QEntity(rootEntity);
 
     // Transform
-    Qt3DCore::QTransform *transform = new Qt3DCore::QTransform;
+    Qt3DCore::QTransform *transform = new Qt3DCore::QTransform(rootEntity);
     transform->setScale(8.0f);
 
     // Custom Mesh (Tetrahedron)
