@@ -33,7 +33,7 @@
 void createScene(Qt3DCore::QEntity *rootEntity);
 void createCustomMeshEntity(Qt3DCore::QEntity *rootEntity);
 void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triangle2> &triangles, QColor materialColor = QColor(0, 0, 255));
-void createLight(Qt3DCore::QEntity *rootEntity);
+void createLight(Qt3DCore::QEntity *rootEntity, QVector3D translation);
 
 static int randomBetween(int low, int high)
 {
@@ -62,7 +62,14 @@ int main(int argc, char *argv[])
     */
     Qt3DCore::QEntity *rootEntity = new Qt3DCore::QEntity; // главная корневая сущность (посути это вся наша сцена, верхний уровень)
 
-    createLight(rootEntity);
+    createLight(rootEntity, QVector3D(0.0f, 0.0f, -30.0f));
+    createLight(rootEntity, QVector3D(0.0f, 0.0f, 30.0f));
+
+    createLight(rootEntity, QVector3D(0.0f, -30.0f, 0.0f));
+    createLight(rootEntity, QVector3D(0.0f, 30.0f, 0.0f));
+
+    createLight(rootEntity, QVector3D(-30.0f, 0.0f, 0.0f));
+    createLight(rootEntity, QVector3D(30.0f, 0.0f, 0.0f));
 
     //createScene(rootEntity); // тор
     //createCustomMeshEntity(rootEntity); // создание обьекта вручную
@@ -80,10 +87,10 @@ int main(int argc, char *argv[])
             //split_lo.append(*it);
             split_lo[0] = *it;
             if(parser.isOverhangsTriangle(i)){
-                createCustomMeshEntity2(rootEntity, split_lo, QColor(0, 0, 255));
+                createCustomMeshEntity2(rootEntity, split_lo, QColor(255, 0, 0));
             }
             else{
-                createCustomMeshEntity2(rootEntity, split_lo, QColor(255, 0, 0));
+                createCustomMeshEntity2(rootEntity, split_lo, QColor(0, 0, 255));
             }
             i++;
         }
@@ -145,18 +152,18 @@ int main(int argc, char *argv[])
     return app.exec();
 }
 
-void createLight(Qt3DCore::QEntity *rootEntity)
+void createLight(Qt3DCore::QEntity *rootEntity, QVector3D translation)
 {
     // создадим отделную сущность для света
     Qt3DCore::QEntity *lightEntity = new Qt3DCore::QEntity(rootEntity);
 
     // создадим для этого ентити трансформ чтобы можно было вигать источник света
     Qt3DCore::QTransform *lightTransform = new Qt3DCore::QTransform(lightEntity);
-    lightTransform->setTranslation(QVector3D(0.0f, 0.0f, -30.0f)); // передвигаем куда хотим
+    lightTransform->setTranslation(translation); // передвигаем куда хотим
 
     // источник света уже сформирован (дефолтный но мы добавим свой точечный)
     Qt3DRender::QPointLight *pointLight = new Qt3DRender::QPointLight(lightEntity);
-    pointLight->setIntensity(0.8f);
+    //pointLight->setIntensity(0.8f);
     //pointLight->setColor(QColor(0, 0, 0));
 
     lightEntity->addComponent(lightTransform);
