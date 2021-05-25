@@ -23,39 +23,24 @@
 #include <Qt3DRender/QSceneLoader>
 #include <Qt3DExtras/QPerVertexColorMaterial>
 #include <QVector2D>
-
 #include <Qt3DExtras/QDiffuseSpecularMaterial>
 
-struct VertexData
-{
-    VertexData()
-    {}
-    VertexData(QVector3D p, QVector2D t, QVector3D n) : position(p), textCoord(t), normal(n)
-    {}
+#include <stlparser.h>
 
-    QVector3D position;
-    QVector2D textCoord;
-    QVector3D normal;
-    QVector3D tangent;
-    QVector3D bitangent;
-};
+#include <QtMath>
 
 void createScene(Qt3DCore::QEntity *rootEntity);
 void createCustomMeshEntity(Qt3DCore::QEntity *rootEntity);
-void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity);
+void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triangle2> &triangles);
 void createLight(Qt3DCore::QEntity *rootEntity);
-
-Qt3DCore::QEntity *addObject(const QVector<VertexData> &vertexes,
-                             const QVector<uint> &indexses,
-                             Qt3DRender::QMaterial *material,
-                             Qt3DCore::QNode *parent = Q_NULLPTR);
-
-
-
 
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+
+    stlParser parser;
+    parser.uploadFile();
+    parser.overhangsThatShouldHaveSupports();
 
     // основное окно
     Qt3DExtras::Qt3DWindow view;
@@ -72,8 +57,16 @@ int main(int argc, char *argv[])
     Qt3DCore::QEntity *rootEntity = new Qt3DCore::QEntity; // главная корневая сущность (посути это вся наша сцена, верхний уровень)
 
     //createScene(rootEntity); // тор
-    createCustomMeshEntity(rootEntity); // создание обьекта вручную
+    //createCustomMeshEntity(rootEntity); // создание обьекта вручную
     //createCustomMeshEntity2(rootEntity);  // загрузка модели с файла
+    createCustomMeshEntity2(rootEntity, parser._triangles2);
+    //createCustomMeshEntity2(rootEntity, parser._overhangsTriangles2);
+    auto var = [&]() {
+        QVector<triangle2> test;
+        test.append(parser._triangles2[0]);
+        //createCustomMeshEntity2(rootEntity, test);
+    };
+    var();
 
     /*
         кроме самой сущности нужно настроить камеру, она уже сожержиться в Qt3DWindow, поэтому нам нужно росто к ней обратиться.
@@ -146,10 +139,10 @@ void createScene(Qt3DCore::QEntity *resultEntity)
         view->rootEntity->...
     */
     Qt3DExtras::QTorusMesh *torusMesh = new Qt3DExtras::QTorusMesh(resultEntity);
-    torusMesh->setRadius(15.0f);
-    torusMesh->setMinorRadius(6.0f);
-    torusMesh->setSlices(6); //это выставляем гладкость, кол-во фрагментов по внутренему радиусу
-    torusMesh->setRings(6); //это выставляем гладкость, кол-во фрагментов по внешнему радиусу
+    torusMesh->setRadius(20.0f);
+    torusMesh->setMinorRadius(3.0f);
+    torusMesh->setSlices(26); //это выставляем гладкость, кол-во фрагментов по внутренему радиусу
+    torusMesh->setRings(26); //это выставляем гладкость, кол-во фрагментов по внешнему радиусу
 
     // теперь нужно попределить материал
     Qt3DExtras::QPhongMaterial *torusMaterial = new Qt3DExtras::QPhongMaterial(resultEntity);
@@ -161,61 +154,184 @@ void createScene(Qt3DCore::QEntity *resultEntity)
     resultEntity->addComponent(torusMaterial);
     resultEntity->addComponent(torusTransform);
 
-    createLight(resultEntity);
+    //createLight(resultEntity);
 }
 
-// не работает?
-void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity)
+// vertices {(x, y, z, nx, ny, nz, cx, cy, cz)}
+void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triangle2> &triangles)
 {
-    Qt3DCore::QEntity *objectEntity = new Qt3DCore::QEntity(rootEntity);
-    Qt3DRender::QSceneLoader *sceneLoader = new Qt3DRender::QSceneLoader(objectEntity);
-    //sceneLoader->setSource(QUrl("qrc:/obj/bunny.3mf"));
-    QUrl url = QUrl::fromLocalFile(":/obj/monkey.obj");
-    sceneLoader->setSource(url);
-    objectEntity->addComponent(sceneLoader);
+    // Torus
+    Qt3DCore::QEntity *customMeshEntity = new Qt3DCore::QEntity(rootEntity);
 
-    Qt3DCore::QTransform *objectTransform = new Qt3DCore::QTransform(objectEntity);
-    objectTransform->setScale(5.0f);
-    //objectTransform->setTranslation(QVector3D(0.0f, 0.0f, 30.0f));
-    objectEntity->addComponent(objectTransform);
+    createLight(customMeshEntity);
+
+    // Material
+    //Qt3DRender::QMaterial *material = new Qt3DExtras::QPerVertexColorMaterial(customMeshEntity);
+    Qt3DExtras::QDiffuseSpecularMaterial *material = new Qt3DExtras::QDiffuseSpecularMaterial(customMeshEntity);
+    material->setDiffuse(QColor(0, 0, 255));
+
+    // Transform
+    Qt3DCore::QTransform *transform = new Qt3DCore::QTransform(customMeshEntity);
+    transform->setScale(0.9f);
+    transform->setTranslation({-9.0f, -9.0f, -9.0f});
+
+    // Custom Mesh (Tetrahedron)
+    Qt3DRender::QGeometryRenderer *customMeshRenderer = new Qt3DRender::QGeometryRenderer(customMeshEntity);
+    Qt3DRender::QGeometry *customGeometry = new Qt3DRender::QGeometry(customMeshRenderer);
+
+    Qt3DRender::QBuffer *vertexDataBuffer = new Qt3DRender::QBuffer(Qt3DRender::QBuffer::VertexBuffer, customGeometry);
+    Qt3DRender::QBuffer *indexDataBuffer = new Qt3DRender::QBuffer(Qt3DRender::QBuffer::IndexBuffer, customGeometry);
+
+    // vec3 for position
+    // vec3 for colors
+    // vec3 for normals
+
+    /*          2
+               /|\
+              / | \
+             / /3\ \
+             0/___\ 1
+    */
+
+    int vertexesCount = (triangles.size()*3); // 136*3=408
+
+    // 4 distinct vertices
+    QByteArray vertexBufferData; // 1 точка = ((0.0f, 0.0f, 0.0f), (0.0f, 0.0f, 0.0f), (0.0f, 0.0f, 0.0f))
+    vertexBufferData.resize(vertexesCount * (3 + 3 + 3) * sizeof(float));
+
+
+    // 1 точка = ((0.0f, 0.0f, 0.0f), (0.0f, 0.0f, 0.0f), (0.0f, 0.0f, 0.0f))
+    // тут 4 точки
+    float *rawVertexArray = reinterpret_cast<float *>(vertexBufferData.data());
+    QVector3D color(1.0f, 0.0f, 0.0f);
+
+    // v1 (v.x, v.y, v.z, n.x, n.y, n.z, r.z, r.y, r.z) = 9 * float
+    int idx = 0;
+    for (const triangle2 &v : triangles) {
+        rawVertexArray[idx++] = v.Vertex_1.x();
+        rawVertexArray[idx++] = v.Vertex_1.y();
+        rawVertexArray[idx++] = v.Vertex_1.z();
+        rawVertexArray[idx++] = v.Normal_vector.x();
+        rawVertexArray[idx++] = v.Normal_vector.y();
+        rawVertexArray[idx++] = v.Normal_vector.z();
+        rawVertexArray[idx++] = color.x();
+        rawVertexArray[idx++] = color.y();
+        rawVertexArray[idx++] = color.z();
+
+        rawVertexArray[idx++] = v.Vertex_2.x();
+        rawVertexArray[idx++] = v.Vertex_2.y();
+        rawVertexArray[idx++] = v.Vertex_2.z();
+        rawVertexArray[idx++] = v.Normal_vector.x();
+        rawVertexArray[idx++] = v.Normal_vector.y();
+        rawVertexArray[idx++] = v.Normal_vector.z();
+        rawVertexArray[idx++] = color.x();
+        rawVertexArray[idx++] = color.y();
+        rawVertexArray[idx++] = color.z();
+
+        rawVertexArray[idx++] = v.Vertex_3.x();
+        rawVertexArray[idx++] = v.Vertex_3.y();
+        rawVertexArray[idx++] = v.Vertex_3.z();
+        rawVertexArray[idx++] = v.Normal_vector.x();
+        rawVertexArray[idx++] = v.Normal_vector.y();
+        rawVertexArray[idx++] = v.Normal_vector.z();
+        rawVertexArray[idx++] = color.x();
+        rawVertexArray[idx++] = color.y();
+        rawVertexArray[idx++] = color.z();
+    }
+
+    // Indices (408)
+    QByteArray indexBufferData;
+    indexBufferData.resize(vertexesCount * 3 * sizeof(ushort));
+    ushort *rawIndexArray = reinterpret_cast<ushort *>(indexBufferData.data());
+
+    idx = 0;
+    for(int i=0; i<(vertexesCount * 3); i++)
+    {
+        rawIndexArray[i] = i;
+    }
+
+    vertexDataBuffer->setData(vertexBufferData);
+    indexDataBuffer->setData(indexBufferData);
+
+    // Attributes
+    Qt3DRender::QAttribute *positionAttribute = new Qt3DRender::QAttribute();
+    positionAttribute->setAttributeType(Qt3DRender::QAttribute::VertexAttribute);
+    positionAttribute->setBuffer(vertexDataBuffer);
+    positionAttribute->setDataType(Qt3DRender::QAttribute::Float);
+    positionAttribute->setDataSize(3);
+    positionAttribute->setByteOffset(0);
+    positionAttribute->setByteStride(9 * sizeof(float));
+    positionAttribute->setCount(vertexesCount);
+    positionAttribute->setName(Qt3DRender::QAttribute::defaultPositionAttributeName());
+
+    Qt3DRender::QAttribute *normalAttribute = new Qt3DRender::QAttribute();
+    normalAttribute->setAttributeType(Qt3DRender::QAttribute::VertexAttribute);
+    normalAttribute->setBuffer(vertexDataBuffer);
+    normalAttribute->setDataType(Qt3DRender::QAttribute::Float);
+    normalAttribute->setDataSize(3);
+    normalAttribute->setByteOffset(3 * sizeof(float));
+    normalAttribute->setByteStride(9 * sizeof(float));
+    normalAttribute->setCount(vertexesCount);
+    normalAttribute->setName(Qt3DRender::QAttribute::defaultNormalAttributeName());
+
+    Qt3DRender::QAttribute *colorAttribute = new Qt3DRender::QAttribute();
+    colorAttribute->setAttributeType(Qt3DRender::QAttribute::VertexAttribute);
+    colorAttribute->setBuffer(vertexDataBuffer);
+    colorAttribute->setDataType(Qt3DRender::QAttribute::Float);
+    colorAttribute->setDataSize(3);
+    colorAttribute->setByteOffset(6 * sizeof(float));
+    colorAttribute->setByteStride(9 * sizeof(float));
+    colorAttribute->setCount(vertexesCount);
+    colorAttribute->setName(Qt3DRender::QAttribute::defaultColorAttributeName());
+
+    Qt3DRender::QAttribute *indexAttribute = new Qt3DRender::QAttribute();
+    indexAttribute->setAttributeType(Qt3DRender::QAttribute::IndexAttribute);
+    indexAttribute->setBuffer(indexDataBuffer);
+    indexAttribute->setDataType(Qt3DRender::QAttribute::UnsignedShort);
+    indexAttribute->setDataSize(1);
+    indexAttribute->setByteOffset(0);
+    indexAttribute->setByteStride(0);
+    indexAttribute->setCount((vertexesCount*3));
+
+    customGeometry->addAttribute(positionAttribute);
+    customGeometry->addAttribute(normalAttribute);
+    //customGeometry->addAttribute(colorAttribute);
+    customGeometry->addAttribute(indexAttribute);
+
+    customMeshRenderer->setInstanceCount(1);
+    customMeshRenderer->setFirstVertex(0);
+    customMeshRenderer->setFirstInstance(0);
+    customMeshRenderer->setPrimitiveType(Qt3DRender::QGeometryRenderer::Triangles);
+    customMeshRenderer->setGeometry(customGeometry);
+    // 4 faces of 3 points
+    customMeshRenderer->setVertexCount((vertexesCount*3));
+
+    customMeshEntity->addComponent(customMeshRenderer);
+    customMeshEntity->addComponent(transform);
+    customMeshEntity->addComponent(material);
 }
 
 void createCustomMeshEntity(Qt3DCore::QEntity *rootEntity)
 {
     // Torus
     Qt3DCore::QEntity *customMeshEntity = new Qt3DCore::QEntity(rootEntity);
-    Qt3DCore::QEntity *customMeshEntity2 = new Qt3DCore::QEntity(rootEntity);
 
     // Material
-    //Qt3DRender::QMaterial *material = new Qt3DExtras::QPerVertexColorMaterial(customMeshEntity);
-    Qt3DExtras::QDiffuseSpecularMaterial *material = new Qt3DExtras::QDiffuseSpecularMaterial(customMeshEntity);
-    material->setDiffuse(QColor(0, 255, 0));
-
-    Qt3DExtras::QDiffuseSpecularMaterial *material2 = new Qt3DExtras::QDiffuseSpecularMaterial(customMeshEntity2);
-    material2->setDiffuse(QColor(0, 0, 255));
-
-
-    //createLight(customMeshEntity);
+    Qt3DRender::QMaterial *material = new Qt3DExtras::QPerVertexColorMaterial(customMeshEntity);
+    //Qt3DExtras::QDiffuseSpecularMaterial *material = new Qt3DExtras::QDiffuseSpecularMaterial(customMeshEntity);
+    //material->setDiffuse(QColor(255, 0, 255));
+    //material->setAlphaBlendingEnabled(false);
 
     // Transform
     Qt3DCore::QTransform *transform = new Qt3DCore::QTransform(customMeshEntity);
-    transform->setScale(8.0f);
-
-    Qt3DCore::QTransform *transform2 = new Qt3DCore::QTransform(customMeshEntity2);
     transform->setScale(8.0f);
 
     // Custom Mesh (Tetrahedron)
     Qt3DRender::QGeometryRenderer *customMeshRenderer = new Qt3DRender::QGeometryRenderer(customMeshEntity);
     Qt3DRender::QGeometry *customGeometry = new Qt3DRender::QGeometry(customMeshRenderer);
 
-    Qt3DRender::QGeometryRenderer *customMeshRenderer2 = new Qt3DRender::QGeometryRenderer(customMeshEntity2);
-    Qt3DRender::QGeometry *customGeometry2 = new Qt3DRender::QGeometry(customMeshRenderer2);
-
     Qt3DRender::QBuffer *vertexDataBuffer = new Qt3DRender::QBuffer(Qt3DRender::QBuffer::VertexBuffer, customGeometry);
     Qt3DRender::QBuffer *indexDataBuffer = new Qt3DRender::QBuffer(Qt3DRender::QBuffer::IndexBuffer, customGeometry);
-
-    Qt3DRender::QBuffer *vertexDataBuffer2 = new Qt3DRender::QBuffer(Qt3DRender::QBuffer::VertexBuffer, customGeometry2);
-    Qt3DRender::QBuffer *indexDataBuffer2 = new Qt3DRender::QBuffer(Qt3DRender::QBuffer::IndexBuffer, customGeometry2);
 
     // vec3 for position
     // vec3 for colors
@@ -232,9 +348,6 @@ void createCustomMeshEntity(Qt3DCore::QEntity *rootEntity)
     QByteArray vertexBufferData; // 1 точка = ((0.0f, 0.0f, 0.0f), (0.0f, 0.0f, 0.0f), (0.0f, 0.0f, 0.0f))
     vertexBufferData.resize(4 * (3 + 3 + 3) * sizeof(float));
 
-    // 2 distinct vertices
-    QByteArray vertexBufferData; // 1 точка = ((0.0f, 0.0f, 0.0f), (0.0f, 0.0f, 0.0f), (0.0f, 0.0f, 0.0f))
-    vertexBufferData.resize(4 * (3 + 3 + 3) * sizeof(float));
 
     // Vertices +
     QVector3D v0(-1.0f, -1.0f, 0.0f);
@@ -256,15 +369,15 @@ void createCustomMeshEntity(Qt3DCore::QEntity *rootEntity)
 
     // Colors
     QVector3D red(1.0f, 0.0f, 0.0f);
-    QVector3D green(0.0f, 1.0f, 0.0f);
-    QVector3D blue(0.0f, 0.0f, 1.0f);
-    QVector3D white(1.0f, 1.0f, 1.0f);
+    QVector3D green(1.0f, 0.0f, 0.0f);
+    QVector3D blue(1.0f, 0.0f, 0.0f);
+    QVector3D white(1.0f, 0.0f, 0.0f);
 
     QVector<QVector3D> vertices = QVector<QVector3D>()
-            << v0 << n0 << red
-            << v1 << n1 << blue
-            << v2 << n2 << green
-            << v3 << n3 << white;
+            << v0 << n0 << red // p[0]
+            << v1 << n1 << blue // p[1]
+            << v2 << n2 << green // p[2]
+            << v3 << n3 << white; // p[3]
 
     // 1 точка = ((0.0f, 0.0f, 0.0f), (0.0f, 0.0f, 0.0f), (0.0f, 0.0f, 0.0f))
     // тут 4 точки
@@ -345,7 +458,7 @@ void createCustomMeshEntity(Qt3DCore::QEntity *rootEntity)
     indexAttribute->setCount(12);
 
     customGeometry->addAttribute(positionAttribute);
-    customGeometry->addAttribute(normalAttribute);
+    //customGeometry->addAttribute(normalAttribute);
     customGeometry->addAttribute(colorAttribute);
     customGeometry->addAttribute(indexAttribute);
 
@@ -361,76 +474,4 @@ void createCustomMeshEntity(Qt3DCore::QEntity *rootEntity)
     customMeshEntity->addComponent(transform);
     customMeshEntity->addComponent(material);
 
-    customMeshEntity2->addComponent(customMeshRenderer2);
-    customMeshEntity2->addComponent(transform2);
-    customMeshEntity2->addComponent(material2);
-
-}
-
-Qt3DCore::QEntity *addObject(const QVector<VertexData> &vertexes,
-                             const QVector<uint> &indexses,
-                             Qt3DRender::QMaterial *material,
-                             Qt3DCore::QNode *parent)
-{
-    Qt3DCore::QEntity *object = new Qt3DCore::QEntity(parent);
-    Qt3DRender::QGeometryRenderer *renderer = new Qt3DRender::QGeometryRenderer(object);
-    Qt3DRender::QGeometry *geometry = new Qt3DRender::QGeometry(renderer);
-
-    Qt3DRender::QBuffer *vertexBuffer = new Qt3DRender::QBuffer(Qt3DRender::QBuffer::VertexBuffer, geometry);
-    Qt3DRender::QBuffer *indexBuffer = new Qt3DRender::QBuffer(Qt3DRender::QBuffer::IndexBuffer, geometry);
-
-    Qt3DRender::QAttribute *positionAttribute = new Qt3DRender::QAttribute(geometry);
-    Qt3DRender::QAttribute *normalAttribute = new Qt3DRender::QAttribute(geometry);
-    Qt3DRender::QAttribute *texcoordAttribute = new Qt3DRender::QAttribute(geometry);
-    Qt3DRender::QAttribute *indexAttribute = new Qt3DRender::QAttribute(geometry);
-
-    const quint32 stride = (3+3+2) * sizeof (float);
-
-    // заполняем атрибуты как для шейдеров
-    positionAttribute->setName(Qt3DRender::QAttribute::defaultPositionAttributeName());
-    positionAttribute->setDataType(Qt3DRender::QAttribute::Float); // 3 координаты со значением float
-    positionAttribute->setDataSize(3);
-    positionAttribute->setAttributeType(Qt3DRender::QAttribute::VertexAttribute);
-    positionAttribute->setBuffer(vertexBuffer);
-    positionAttribute->setByteStride(stride);
-    positionAttribute->setByteOffset(0);
-
-    normalAttribute->setName(Qt3DRender::QAttribute::defaultNormalAttributeName());
-    normalAttribute->setDataType(Qt3DRender::QAttribute::Float);
-    normalAttribute->setDataSize(3);
-    normalAttribute->setAttributeType(Qt3DRender::QAttribute::VertexAttribute);
-    normalAttribute->setBuffer(vertexBuffer);
-    normalAttribute->setByteStride(stride);
-    normalAttribute->setByteOffset(3*sizeof(float));
-
-    texcoordAttribute->setName(Qt3DRender::QAttribute::defaultTextureCoordinateAttributeName());
-    texcoordAttribute->setDataType(Qt3DRender::QAttribute::Float);
-    texcoordAttribute->setDataSize(2);
-    texcoordAttribute->setAttributeType(Qt3DRender::QAttribute::VertexAttribute);
-    texcoordAttribute->setBuffer(vertexBuffer);
-    texcoordAttribute->setByteStride(stride);
-    texcoordAttribute->setByteOffset((3+3)*sizeof(float));
-
-    indexAttribute->setAttributeType(Qt3DRender::QAttribute::IndexAttribute);
-    indexAttribute->setDataType(Qt3DRender::QAttribute::UnsignedInt);
-    indexAttribute->setBuffer(indexBuffer);
-    indexAttribute->setCount(indexses.size());
-
-    // Torus
-    //Qt3DCore::QEntity *customMeshEntity = new Qt3DCore::QEntity(rootEntity);
-
-    // Material
-    //Qt3DRender::QMaterial *material = new Qt3DExtras::QPerVertexColorMaterial(customMeshEntity);
-
-    // Transform
-    /*Qt3DCore::QTransform *transform = new Qt3DCore::QTransform(customMeshEntity);
-    transform->setScale(8.0f);
-
-    // Custom Mesh (Tetrahedron)
-    Qt3DRender::QGeometryRenderer *customMeshRenderer = new Qt3DRender::QGeometryRenderer(customMeshEntity);
-    Qt3DRender::QGeometry *customGeometry = new Qt3DRender::QGeometry(customMeshRenderer);
-
-    */
-
-    return object;
 }
