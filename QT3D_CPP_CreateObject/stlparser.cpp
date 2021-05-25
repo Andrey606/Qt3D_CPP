@@ -79,3 +79,16 @@ void stlParser::overhangsThatShouldHaveSupports()
         i++;
     }
 }
+
+bool stlParser::isOverhangsTriangle(int index)
+{
+    for(auto &v : _overhangsTriangles)
+    {
+        if(index == v._positionInTrinalesArray)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}

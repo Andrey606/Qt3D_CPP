@@ -28,11 +28,17 @@
 #include <stlparser.h>
 
 #include <QtMath>
+#include <QRandomGenerator>
 
 void createScene(Qt3DCore::QEntity *rootEntity);
 void createCustomMeshEntity(Qt3DCore::QEntity *rootEntity);
-void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triangle2> &triangles);
+void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triangle2> &triangles, QColor materialColor = QColor(0, 0, 255));
 void createLight(Qt3DCore::QEntity *rootEntity);
+
+static int randomBetween(int low, int high)
+{
+    return (qrand() % ((high + 1) - low) + low);
+}
 
 int main(int argc, char *argv[])
 {
@@ -56,15 +62,40 @@ int main(int argc, char *argv[])
     */
     Qt3DCore::QEntity *rootEntity = new Qt3DCore::QEntity; // главная корневая сущность (посути это вся наша сцена, верхний уровень)
 
+    createLight(rootEntity);
+
     //createScene(rootEntity); // тор
     //createCustomMeshEntity(rootEntity); // создание обьекта вручную
     //createCustomMeshEntity2(rootEntity);  // загрузка модели с файла
-    createCustomMeshEntity2(rootEntity, parser._triangles2);
+    //createCustomMeshEntity2(rootEntity, parser._triangles2, QColor(0,255,0));
     //createCustomMeshEntity2(rootEntity, parser._overhangsTriangles2);
     auto var = [&]() {
-        QVector<triangle2> test;
-        test.append(parser._triangles2[0]);
-        //createCustomMeshEntity2(rootEntity, test);
+        std::size_t const half_size = parser._triangles2.size() / 2;
+
+        QVector<triangle2> split_lo;
+        split_lo.resize(1);
+        int i = 0;
+        for(auto it = parser._triangles2.begin(); it!= parser._triangles2.end(); ++it)
+        {
+            //split_lo.append(*it);
+            split_lo[0] = *it;
+            if(parser.isOverhangsTriangle(i)){
+                createCustomMeshEntity2(rootEntity, split_lo, QColor(0, 0, 255));
+            }
+            else{
+                createCustomMeshEntity2(rootEntity, split_lo, QColor(255, 0, 0));
+            }
+            i++;
+        }
+
+        QVector<triangle2> split_hi;
+        for(auto it = parser._triangles2.begin() + half_size; it!= parser._triangles2.end() + half_size; ++it)
+        {
+            //split_hi.append(*it);
+        }
+
+        //createCustomMeshEntity2(rootEntity, split_lo, QColor(255, 0, 0));
+        //createCustomMeshEntity2(rootEntity, split_hi, QColor(0, 0, 255));
     };
     var();
 
@@ -93,7 +124,7 @@ int main(int argc, char *argv[])
 
         поэтому мы отодвинем камеру назад по оси Z на 40 юнитов
     */
-    camera->setPosition(QVector3D(0.0f, 0.0f, 40.0f));
+    camera->setPosition(QVector3D(0.0f, 0.0f, -40.0f));
 
     // то куда камера смотрит, дальше будем использовать чтобы крутить камеру вокруг обьекта
     camera->setViewCenter(QVector3D(0.0f, 0.0f, 0.0f));
@@ -121,11 +152,12 @@ void createLight(Qt3DCore::QEntity *rootEntity)
 
     // создадим для этого ентити трансформ чтобы можно было вигать источник света
     Qt3DCore::QTransform *lightTransform = new Qt3DCore::QTransform(lightEntity);
-    lightTransform->setTranslation(QVector3D(0.0f, 0.0f, 30.0f)); // передвигаем куда хотим
+    lightTransform->setTranslation(QVector3D(0.0f, 0.0f, -30.0f)); // передвигаем куда хотим
 
     // источник света уже сформирован (дефолтный но мы добавим свой точечный)
     Qt3DRender::QPointLight *pointLight = new Qt3DRender::QPointLight(lightEntity);
-    pointLight->setColor(QColor(0, 0, 255));
+    pointLight->setIntensity(0.8f);
+    //pointLight->setColor(QColor(0, 0, 0));
 
     lightEntity->addComponent(lightTransform);
     lightEntity->addComponent(pointLight);
@@ -158,22 +190,22 @@ void createScene(Qt3DCore::QEntity *resultEntity)
 }
 
 // vertices {(x, y, z, nx, ny, nz, cx, cy, cz)}
-void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triangle2> &triangles)
+void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triangle2> &triangles, QColor materialColor)
 {
     // Torus
     Qt3DCore::QEntity *customMeshEntity = new Qt3DCore::QEntity(rootEntity);
 
-    createLight(customMeshEntity);
-
     // Material
     //Qt3DRender::QMaterial *material = new Qt3DExtras::QPerVertexColorMaterial(customMeshEntity);
     Qt3DExtras::QDiffuseSpecularMaterial *material = new Qt3DExtras::QDiffuseSpecularMaterial(customMeshEntity);
-    material->setDiffuse(QColor(0, 0, 255));
+    material->setDiffuse(materialColor);
 
     // Transform
     Qt3DCore::QTransform *transform = new Qt3DCore::QTransform(customMeshEntity);
     transform->setScale(0.9f);
-    transform->setTranslation({-9.0f, -9.0f, -9.0f});
+    transform->setTranslation({9.0f, -9.0f, -9.0f});
+    transform->setRotationX(-90);
+    transform->setRotationY(180);
 
     // Custom Mesh (Tetrahedron)
     Qt3DRender::QGeometryRenderer *customMeshRenderer = new Qt3DRender::QGeometryRenderer(customMeshEntity);
@@ -203,7 +235,7 @@ void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triang
     // 1 точка = ((0.0f, 0.0f, 0.0f), (0.0f, 0.0f, 0.0f), (0.0f, 0.0f, 0.0f))
     // тут 4 точки
     float *rawVertexArray = reinterpret_cast<float *>(vertexBufferData.data());
-    QVector3D color(1.0f, 0.0f, 0.0f);
+    QVector3D color(0.0f, 0.0f, 0.0f);
 
     // v1 (v.x, v.y, v.z, n.x, n.y, n.z, r.z, r.y, r.z) = 9 * float
     int idx = 0;
@@ -244,7 +276,6 @@ void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triang
     indexBufferData.resize(vertexesCount * 3 * sizeof(ushort));
     ushort *rawIndexArray = reinterpret_cast<ushort *>(indexBufferData.data());
 
-    idx = 0;
     for(int i=0; i<(vertexesCount * 3); i++)
     {
         rawIndexArray[i] = i;
@@ -274,16 +305,6 @@ void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triang
     normalAttribute->setCount(vertexesCount);
     normalAttribute->setName(Qt3DRender::QAttribute::defaultNormalAttributeName());
 
-    Qt3DRender::QAttribute *colorAttribute = new Qt3DRender::QAttribute();
-    colorAttribute->setAttributeType(Qt3DRender::QAttribute::VertexAttribute);
-    colorAttribute->setBuffer(vertexDataBuffer);
-    colorAttribute->setDataType(Qt3DRender::QAttribute::Float);
-    colorAttribute->setDataSize(3);
-    colorAttribute->setByteOffset(6 * sizeof(float));
-    colorAttribute->setByteStride(9 * sizeof(float));
-    colorAttribute->setCount(vertexesCount);
-    colorAttribute->setName(Qt3DRender::QAttribute::defaultColorAttributeName());
-
     Qt3DRender::QAttribute *indexAttribute = new Qt3DRender::QAttribute();
     indexAttribute->setAttributeType(Qt3DRender::QAttribute::IndexAttribute);
     indexAttribute->setBuffer(indexDataBuffer);
@@ -295,7 +316,6 @@ void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triang
 
     customGeometry->addAttribute(positionAttribute);
     customGeometry->addAttribute(normalAttribute);
-    //customGeometry->addAttribute(colorAttribute);
     customGeometry->addAttribute(indexAttribute);
 
     customMeshRenderer->setInstanceCount(1);

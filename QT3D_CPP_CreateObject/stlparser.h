@@ -39,6 +39,7 @@ public:
 
    void uploadFile();
    void overhangsThatShouldHaveSupports();
+   bool isOverhangsTriangle(int index);
 
 public:
     stl _header;
