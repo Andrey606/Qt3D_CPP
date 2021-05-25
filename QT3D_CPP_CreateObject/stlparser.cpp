@@ -60,7 +60,7 @@ void stlParser::overhangsThatShouldHaveSupports()
                 qPow(obj.Normal_vector[1], 2) +
                 qPow(obj.Normal_vector[2], 2))));
 
-        if(angle >= 135)
+        if(angle >= 100) // 135
         {
             _overhangsTriangles.append({(i-1), angle});
 
