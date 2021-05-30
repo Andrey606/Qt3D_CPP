@@ -32,7 +32,7 @@
 
 void createScene(Qt3DCore::QEntity *rootEntity);
 void createCustomMeshEntity(Qt3DCore::QEntity *rootEntity);
-void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triangle2> &triangles, QColor materialColor = QColor(0, 0, 255));
+Qt3DCore::QEntity *createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triangle2> &triangles, QColor materialColor = QColor(0, 0, 255));
 void createLight(Qt3DCore::QEntity *rootEntity, QVector3D translation);
 
 static int randomBetween(int low, int high)
@@ -76,6 +76,10 @@ int main(int argc, char *argv[])
     //createCustomMeshEntity2(rootEntity);  // загрузка модели с файла
     //createCustomMeshEntity2(rootEntity, parser._triangles2, QColor(0,255,0));
     //createCustomMeshEntity2(rootEntity, parser._overhangsTriangles2);
+    Qt3DCore::QEntity *modelEntity = new Qt3DCore::QEntity(rootEntity);
+    Qt3DCore::QEntity *customMeshEntity1 = new Qt3DCore::QEntity(modelEntity);
+    Qt3DCore::QEntity *customMeshEntity2 = new Qt3DCore::QEntity(modelEntity);
+
     auto var = [&]() {
         std::size_t const half_size = parser._triangles2.size() / 2;
 
@@ -87,10 +91,10 @@ int main(int argc, char *argv[])
             //split_lo.append(*it);
             split_lo[0] = *it;
             if(parser.isOverhangsTriangle(i)){
-                createCustomMeshEntity2(rootEntity, split_lo, QColor(255, 0, 0));
+                createCustomMeshEntity2(customMeshEntity1, split_lo, QColor(255, 0, 0));
             }
             else{
-                createCustomMeshEntity2(rootEntity, split_lo, QColor(0, 0, 255));
+                createCustomMeshEntity2(customMeshEntity2, split_lo, QColor(0, 0, 255));
             }
             i++;
         }
@@ -197,7 +201,7 @@ void createScene(Qt3DCore::QEntity *resultEntity)
 }
 
 // vertices {(x, y, z, nx, ny, nz, cx, cy, cz)}
-void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triangle2> &triangles, QColor materialColor)
+Qt3DCore::QEntity *createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triangle2> &triangles, QColor materialColor)
 {
     // Torus
     Qt3DCore::QEntity *customMeshEntity = new Qt3DCore::QEntity(rootEntity);
@@ -336,6 +340,8 @@ void createCustomMeshEntity2(Qt3DCore::QEntity *rootEntity, const QVector<triang
     customMeshEntity->addComponent(customMeshRenderer);
     customMeshEntity->addComponent(transform);
     customMeshEntity->addComponent(material);
+
+    return customMeshEntity;
 }
 
 void createCustomMeshEntity(Qt3DCore::QEntity *rootEntity)
